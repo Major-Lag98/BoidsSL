@@ -1,0 +1,55 @@
+﻿#pragma kernel CSMain
+static const int threadGroupSize = 1024;
+
+struct Boid
+{
+    float3 position;
+    float3 direction;
+    float3 flockHeading;
+    float3 flockCentre;
+    float3 separationHeading;
+    int numFlockmates;
+};
+
+RWStructuredBuffer<Boid> boids;
+int numBoids;
+float viewRadius;
+float avoidRadius;
+
+[numthreads(threadGroupSize, 1, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    Boid currentBoid = boids[id.x];
+
+    float3 flockHeading = float3(0, 0, 0);
+    float3 flockCentre = float3(0, 0, 0);
+    float3 separationHeading = float3(0, 0, 0);
+    int numFlockmates = 0;
+
+    for (int indexB = 0; indexB < numBoids; indexB++)
+    {
+        if (id.x == indexB)
+            continue;
+
+        Boid boidB = boids[indexB];
+        float3 offset = boidB.position - currentBoid.position;
+        float sqrDst = dot(offset, offset);
+
+        if (sqrDst < viewRadius * viewRadius)
+        {
+            numFlockmates++;
+            flockHeading += boidB.direction;
+            flockCentre += boidB.position;
+
+            if (sqrDst < avoidRadius * avoidRadius)
+                separationHeading -= offset / sqrDst;
+        }
+    }
+
+    currentBoid.numFlockmates = numFlockmates;
+    currentBoid.flockHeading = flockHeading;
+    currentBoid.flockCentre = flockCentre;
+    currentBoid.separationHeading = separationHeading;
+
+    boids[id.x] = currentBoid;
+}
